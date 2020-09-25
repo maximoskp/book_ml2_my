@@ -42,3 +42,42 @@ train_set , test_set = split_train_test(housing, 0.2)
 
 # keep this split for all other runs (?)
 from zlib import crc32
+
+def test_set_check( identifier , test_ratio ):
+    return crc32( np.int64( identifier ) ) & 0xffffffff < test_ratio * 2**32
+
+def split_train_test_by_id( data , test_ratio , id_column ):
+    ids = data[id_column]
+    in_test_set = ids.apply( lambda id_ : test_set_check( id_ , test_ratio ) )
+    return data.loc[ ~in_test_set ] , data.loc[ in_test_set ]
+
+# id based on item's row number
+housing_with_id = housing.reset_index() # add index column
+train_set , test_set = split_train_test_by_id( housing_with_id , 0.2 , "index" )
+
+# but if data are mixed with others, then row numbers get mixed
+# so it's a good idea to link id to a constant property, e.g. geographic location
+# e.g. group by id based on a (constant) combination of longitude and latitude
+housing_with_id[ "id" ] = housing[ "longitude" ] * 1000 + housing[ "latitude" ]
+train_set , test_set = split_train_test_by_id( housing_with_id , 0.2 , "id" )
+
+# or use sklearn's train-test split that is based on given random seed
+from sklearn.model_selection import train_test_split
+train_test , test_set = train_test_split( housing , test_size=0.2 , random_state=42 )
+
+# take stratified sample based on income levels
+# so create income levels
+housing[ "income_cat" ] = pd.cut( housing["median_income"] ,
+                                 bins = [0., 1.5, 3., 4.5, 6., np.inf],
+                                 labels = [1,2,3,4,5] )
+# and show histogram of strata
+housing['income_cat'].hist()
+
+# get stratified sample
+from sklearn.model_selection import StratifiedShuffleSplit
+
+split = StratifiedShuffleSplit( n_splits = 1, test_size = 0.2, random_state = 42)
+
+for train_index , test_index in split.split( housing , housing['income_cat'] ):
+    strat_train_set = housing.loc[ train_index ]
+    strat_trest_set = housing.loc[ test_index ]
