@@ -80,4 +80,23 @@ split = StratifiedShuffleSplit( n_splits = 1, test_size = 0.2, random_state = 42
 
 for train_index , test_index in split.split( housing , housing['income_cat'] ):
     strat_train_set = housing.loc[ train_index ]
-    strat_trest_set = housing.loc[ test_index ]
+    strat_test_set = housing.loc[ test_index ]
+
+# check stratification results
+real_overall_strat = housing['income_cat'].value_counts() / len(housing)
+real_train_strat = strat_train_set['income_cat'].value_counts() / len(strat_train_set)
+real_test_strat = strat_test_set['income_cat'].value_counts() / len(strat_test_set)
+
+# ploting geography of data
+housing.plot(kind = 'scatter', x='longitude' , y='latitude', alpha=0.1)
+# marker size (s) represents district population
+# color (c) represents price
+housing.plot( kind = 'scatter', x='longitude' , y='latitude', alpha=0.4,
+             s = housing['population']/100, label='population', figsize=(10,7),
+             c = 'median_house_value', cmap=plt.get_cmap('jet'), colorbar=True )
+plt.legend()
+plt.savefig('figs/ch2_geography.png', dps=300)
+
+# check for correlations inside the data - all pairs of columns
+corr_matrix = housing.corr()
+corr_matrix[ corr_matrix >= 0.5 ]
