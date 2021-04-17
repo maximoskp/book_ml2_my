@@ -24,22 +24,33 @@ def prepare_country_stats(oecd_bli, gdp_per_capita):
     keep_indices = list(set(range(36)) - set(remove_indices))
     return full_country_stats[["GDP per capita", 'Life satisfaction']].iloc[keep_indices]
 
+# %%
+
 # load data
 oecd_bli = pd.read_csv('datasets' + os.sep + 'lifesat' + os.sep + 'oecd_bli_2015.csv', thousands=',')
 gdp_per_capita = pd.read_csv('datasets' + os.sep + 'lifesat' + os.sep + 'gdp_per_capita.csv', thousands=',', delimiter='\t', encoding='latin1')
+
+# %%
 
 country_stats = prepare_country_stats(oecd_bli, gdp_per_capita)
 
 x = np.c_[country_stats['GDP per capita']]
 y = np.c_[country_stats['Life satisfaction']]
 
+# %% 
+
 # linear regression model
 model = sklearn.linear_model.LinearRegression()
 model.fit(x,y)
+
+# %%
+
 # fit Cyprus
 x_new = [[22587]] # GDP per capita
 # make prediction
 y_new = model.predict(x_new)
+
+# %%
 
 # visualise the data
 plt.clf()
