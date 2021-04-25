@@ -361,3 +361,22 @@ import joblib
 
 joblib.dump( forest_reg , 'saved_models/ch2_rand_forest_reg_model.pkl' )
 # load as: forest_reg = joblib.load('saved_models/ch2_rand_forest_reg_model.pkl')
+
+# %% fine tune through grid search
+
+from sklearn.model_selection import GridSearchCV
+
+params_grid = [ {'n_estimators': [3,10,30], 'max_features':[2, 4, 6, 8]},
+              {'bootstrap':[False], 'n_estimators': [3,10], 'max_features': [2, 3, 4]}]
+
+forest_reg = RandomForestRegressor()
+
+grid_search = GridSearchCV( forest_reg, params_grid, cv=10,
+                           scoring='neg_mean_squared_error', return_train_score=True)
+
+grid_search.fit( housing_prepared, housing_labels )
+
+# and pick up the best model
+print(repr(grid_search.best_params_))
+
+print(grid_search.best_estimator_)
