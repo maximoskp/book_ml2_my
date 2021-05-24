@@ -31,3 +31,21 @@ export_graphviz(
 # transform .dot to .png
 import os
 os.system('dot -Tpng figs/ch6_iris_tree.dot -o figs/ch6_iris_tree.png')
+
+# %% make prediction
+# traverse the tree and get the number of instances per class in the leaf node
+# ratio of instances from the asked class is the probability that the
+# predicted instance belongs to this class
+
+tmp_prediction_proba = tree_clf.predict_proba( [ [5, 1.5] ] )
+print( 'tmp_prediction_proba: ', tmp_prediction_proba )
+
+tmp_prediction = tree_clf.predict( [ [5,1.5] ] )
+print( 'tmp_prediction: ', tmp_prediction )
+
+# however, probabilities are still the same even if input might be more clear
+tmp_prediction_proba = tree_clf.predict_proba( [ [6, 1.5] ] )
+print( 'tmp_prediction_proba: ', tmp_prediction_proba )
+
+# Decision trees for regression: p183
+# Sensitivity to orientation: helps to use PCA p185
