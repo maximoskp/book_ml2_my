@@ -75,4 +75,44 @@ bag_clf = BaggingClassifier(
 bag_clf.fit( X_train , y_train )
 print( bag_clf.oob_score_ )
 
-# %% page 196
+# the probabilities assigned to each oob instance can be obtained
+print( repr( bag_clf.oob_decision_function_ ) )
+
+# %% test on test data
+
+from sklearn.metrics import accuracy_score
+
+y_pred = bag_clf.predict( X_test )
+acc = accuracy_score( y_test, y_pred)
+print('acc: ', acc)
+
+# %%  random forests
+
+from sklearn.ensemble import RandomForestClassifier
+
+rnd_clf = RandomForestClassifier(n_estimators=500, max_leaf_nodes=16, n_jobs=-1)
+rnd_clf.fit( X_train, y_train )
+
+y_pred_rf = rnd_clf.predict( X_test )
+acc_rf = accuracy_score( y_test, y_pred)
+print('acc_rf: ', acc_rf)
+
+# %% same classifier as above, but not optimised
+bag_clf = BaggingClassifier(
+    DecisionTreeClassifier(max_features='auto', max_leaf_nodes=16),
+    n_estimators=500, max_samples=1.0, bootstrap=True, n_jobs=-1)
+
+# check Extra-Trees, Extremele Random Trees, that employ random splitting 
+# points for some features, instead of computing the less impure point.
+
+# %% feature importance
+
+# how much impurity is realted to a specific node/feature
+from sklearn.datasets import load_iris
+
+iris = load_iris()
+rnd_clf = RandomForestClassifier( n_estimators=500, n_jobs=-1 )
+rnd_clf.fit( iris['data'] , iris['target'] )
+
+for name, score in zip( iris['feature_names'] , rnd_clf.feature_importances_ ):
+    print( name + ': ' + str(score) )
