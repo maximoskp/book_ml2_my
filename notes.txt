@@ -1,0 +1,7 @@
+Export yml without dependencies:
+https://stackoverflow.com/questions/41274007/anaconda-export-environment-file
+
+conda env export --no-builds
+
+TODO: add
+xgboost in windows
