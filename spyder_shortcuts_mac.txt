@@ -1,0 +1,8 @@
+spyder shortcuts for Mac
+
+Look for:
+End of line (put fn + ->)
+Next word (put alt + ->)
+Next cursor position (put cmd + ->)
+
+And the opposite (start of line, previous word and cursor position)
