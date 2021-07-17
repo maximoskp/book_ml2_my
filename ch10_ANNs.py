@@ -79,6 +79,10 @@ weights, biases = hidden1.get_weights()
 print(repr(weights.shape))
 print(repr(biases.shape))
 
+plt.clf()
+plt.imshow(weights)
+plt.show()
+
 # %% compile model
 
 model.compile(loss='sparse_categorical_crossentropy',
@@ -105,3 +109,168 @@ plt.show()
 # the training within this epoch has been completed, while training 
 # error is computed during training.
 # Check comment in p.305: training error should be shifted half epoch
+
+# %% evaluate model
+
+model.evaluate( X_test, y_test )
+
+# %% make predictions
+
+X_new = X_test[:3]
+
+y_proba = model.predict(X_new)
+print(y_proba.round(2))
+
+# if only interested in prediction label
+y_pred = model.predict_classes(X_new)
+print(y_pred.round(2))
+
+plt.clf()
+plt.subplot(131)
+plt.imshow(X_new[0], cmap='gray')
+plt.title( 'pred: ' + str(y_pred[0]) + ' - true: ' + str(y_test[0]) )
+plt.subplot(132)
+plt.imshow(X_new[1], cmap='gray')
+plt.title( 'pred: ' + str(y_pred[1]) + ' - true: ' + str(y_test[1]) )
+plt.subplot(133)
+plt.imshow(X_new[2], cmap='gray')
+plt.title( 'pred: ' + str(y_pred[2]) + ' - true: ' + str(y_test[2]) )
+
+# %% regresssion - california housing
+
+from sklearn.datasets import fetch_california_housing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# %%
+
+housing = fetch_california_housing()
+
+X_train_full, X_test, y_train_full, y_test = train_test_split(housing.data, housing.target)
+X_train, X_valid, y_train, y_valid = train_test_split(X_train_full, y_train_full)
+
+scaler = StandardScaler()
+
+X_train = scaler.fit_transform(X_train)
+X_valid = scaler.fit_transform(X_valid)
+X_test = scaler.fit_transform(X_test)
+
+# %% construct model
+
+model = keras.models.Sequential([
+    keras.layers.Dense(30, activation='relu', input_shape=X_train.shape[1:]),
+    keras.layers.Dense(1)
+])
+
+model.compile(loss='mean_squared_error', optimizer='sgd')
+
+# %% train
+
+history = model.fit( X_train, y_train, epochs=20, validation_data=(X_valid, y_valid) )
+# MSE error will not display accuracies
+
+# %% predict
+
+X_new = X_test[:3]
+y_pred = model.predict( X_new )
+
+print('predicted: ' + repr(y_pred))
+print('true: ' + repr(y_test[:3]))
+
+# %% functional api
+
+input_ = keras.layers.Input(shape=X_train.shape[1:])
+# create hidder an directly pass input_ as a function
+hidden1 = keras.layers.Dense( 30, activation='relu' )(input_)
+hidden2 = keras.layers.Dense( 30, activation='relu' )(hidden1)
+concat = keras.layers.Concatenate()([input_, hidden2])
+# or
+# concat = keras.layers.concatenate( [input_, hidden2] )
+output = keras.layers.Dense(1)(concat)
+
+model = keras.Model( inputs=[input_], outputs=[output] )
+
+model.summary()
+
+# %% multiple inputs
+
+inputA = keras.layers.Input(shape=[5], name='wide_input')
+inputB = keras.layers.Input(shape=[6], name='deep_input')
+hidden1 = keras.layers.Dense(30, activation='relu')(inputB)
+hidden2 = keras.layers.Dense(30, activation='relu')(hidden1)
+concat = keras.layers.Concatenate()([inputA, hidden2])
+output = keras.layers.Dense(1, name='output')(concat)
+
+model = keras.Model(inputs=[inputA, inputB], outputs=[output])
+
+model.summary()
+
+# %% train / test with multiple inputs
+
+X_train_A , X_train_B = X_train[:, :5] , X_train[:, 2:]
+X_valid_A , X_valid_B = X_valid[:, :5] , X_valid[:, 2:]
+X_test_A , X_test_B = X_test[:, :5] , X_test[:, 2:]
+
+X_new_A , X_new_B = X_test_A[:3] , X_test_B[:3]
+y_new = y_test[:3]
+
+model.compile(loss='mse', optimizer=keras.optimizers.SGD(lr=1e-3))
+
+'''
+history = model.fit(
+    (X_train_A, X_train_B), y_train, epochs=20,
+    validation_data=((X_valid_A, X_valid_B), y_valid)
+)
+'''
+
+# dictionary for inputs to avoid confusion
+history = model.fit(
+    {'wide_input': X_train_A, 'deep_input': X_train_B}, y_train, epochs=20,
+    validation_data=((X_valid_A, X_valid_B), y_valid)
+)
+
+# %% evaluate
+mse_test = model.evaluate( [X_test_A, X_test_B], y_test )
+print('mse_test: ' + repr(mse_test))
+y_pred = model.predict( [X_new_A, X_new_B] )
+print('y_pred: ' + repr(y_pred))
+print('true: ' + repr(y_new))
+
+# %% multiple outputs
+
+inputA = keras.layers.Input(shape=[5], name='wide_input')
+inputB = keras.layers.Input(shape=[6], name='deep_input')
+hidden1 = keras.layers.Dense(30, activation='relu')(inputB)
+hidden2 = keras.layers.Dense(30, activation='relu')(hidden1)
+concat = keras.layers.Concatenate()([inputA, hidden2])
+output = keras.layers.Dense(1, name='main_output')(concat)
+aux_output = keras.layers.Dense(1, name='aux_output')(hidden2)
+
+model = keras.Model(inputs=[inputA, inputB], outputs=[output, aux_output])
+
+model.summary()
+
+# %% cost function of outputs
+
+model.compile( loss=['mse', 'mse'], loss_weights=[0.9, 0.1], optimizer='sgd' )
+
+history = model.fit(
+    [X_train_A, X_train_B], [y_train, y_train], epochs=20,
+    validation_data=( [X_valid_A, X_valid_B], [y_valid, y_valid] )
+)
+
+# %% evaluate
+mse_test = model.evaluate( [X_test_A, X_test_B], [y_test, y_test] )
+print('mse_test: ' + repr(mse_test))
+y_pred = model.predict( (X_new_A, X_new_B) )
+print('y_pred: ' + repr(y_pred))
+print('true: ' + repr(y_new))
+
+
+
+
+
+
+
+
+
