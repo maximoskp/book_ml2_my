@@ -266,6 +266,214 @@ y_pred = model.predict( (X_new_A, X_new_B) )
 print('y_pred: ' + repr(y_pred))
 print('true: ' + repr(y_new))
 
+# %% subclassing API
+
+class WideAndDeepModel(keras.Model):
+    def __init__(self, units=30, activation='relu', **kwargs):
+        super().__init__(**kwargs)
+        self.hidden1 = keras.layers.Dense(units, activation=activation)
+        self.hidden2 = keras.layers.Dense(units, activation=activation)
+        self.main_output = keras.layers.Dense(1)
+        self.aux_output = keras.layers.Dense(1)
+    # end init
+    
+    def call(self, inputs):
+        input_A, input_B = inputs
+        hidden1 = self.hidden1(input_B)
+        hidden2 = self.hidden2(hidden1)
+        concat = keras.layers.concatenate( [inputA, hidden2] )
+        main_output = self.main_output(concat)
+        aux_output = self.aux_output(hidden2)
+        return main_output, aux_output
+    # end call
+# end class
+
+model = WideAndDeepModel()
+
+# %%
+
+'''
+model.compile(loss='mse', optimizer=keras.optimizers.SGD(lr=1e-3))
+model.fit( (inputA, inputB), y_train )
+model.summary()
+'''
+
+# %% saving / loading a model - not working so simply with subclassing
+
+inputA = keras.layers.Input(shape=[5], name='wide_input')
+inputB = keras.layers.Input(shape=[6], name='deep_input')
+hidden1 = keras.layers.Dense(30, activation='relu')(inputB)
+hidden2 = keras.layers.Dense(30, activation='relu')(hidden1)
+concat = keras.layers.Concatenate()([inputA, hidden2])
+output = keras.layers.Dense(1, name='main_output')(concat)
+aux_output = keras.layers.Dense(1, name='aux_output')(hidden2)
+
+model = keras.Model(inputs=[inputA, inputB], outputs=[output, aux_output])
+
+model.summary()
+
+model.compile( loss=['mse', 'mse'], loss_weights=[0.9, 0.1], optimizer='sgd' )
+
+history = model.fit(
+    [X_train_A, X_train_B], [y_train, y_train], epochs=20,
+    validation_data=( [X_valid_A, X_valid_B], [y_valid, y_valid] )
+)
+
+# %% saving
+
+import os
+
+model.save('models'+os.sep+'ch10_test_model.h5')
+
+# %% loading
+
+model = keras.models.load_model('models'+os.sep+'ch10_test_model.h5')
+model.summary()
+
+# %% callbacks
+
+nputA = keras.layers.Input(shape=[5], name='wide_input')
+inputB = keras.layers.Input(shape=[6], name='deep_input')
+hidden1 = keras.layers.Dense(30, activation='relu')(inputB)
+hidden2 = keras.layers.Dense(30, activation='relu')(hidden1)
+concat = keras.layers.Concatenate()([inputA, hidden2])
+output = keras.layers.Dense(1, name='main_output')(concat)
+aux_output = keras.layers.Dense(1, name='aux_output')(hidden2)
+
+model = keras.Model(inputs=[inputA, inputB], outputs=[output, aux_output])
+
+model.summary()
+
+model.compile( loss=['mse', 'mse'], loss_weights=[0.9, 0.1], optimizer='sgd' )
+
+checkpoint_cb = keras.callbacks.ModelCheckpoint(
+    'models'+os.sep+'ch10_checkpoint.h5',
+    save_best_only=True
+)
+early_stopping_cb = keras.callbacks.EarlyStopping(
+    patience=10,
+    restore_best_weights=True
+)
+
+history = model.fit(
+    [X_train_A, X_train_B], [y_train, y_train], epochs=20,
+    validation_data=( [X_valid_A, X_valid_B], [y_valid, y_valid] ),
+    callbacks=[checkpoint_cb, early_stopping_cb]
+)
+
+# %% custom callbacks
+
+class PrintRatio(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs):
+        print( '\nval/train: {:.2f}'.format(logs['val_loss']/logs['loss']) )
+
+ratio_print_cb = PrintRatio()
+
+history = model.fit(
+    [X_train_A, X_train_B], [y_train, y_train], epochs=20,
+    validation_data=( [X_valid_A, X_valid_B], [y_valid, y_valid] ),
+    callbacks=[checkpoint_cb, early_stopping_cb, ratio_print_cb]
+)
+
+# %% tensorboard
+
+import os
+root_logdir = os.path.join(os.curdir, 'my_logs')
+
+def get_run_logdir():
+    import time
+    run_id = time.strftime( 'run_%Y_%m_%d-%H_%M_%S' )
+    return os.path.join(root_logdir, run_id)
+# end getrun_logdir
+
+# %% 
+
+tensorboard_cb = keras.callbacks.TensorBoard( get_run_logdir() )
+
+history = model.fit(
+    [X_train_A, X_train_B], [y_train, y_train], epochs=20,
+    validation_data=( [X_valid_A, X_valid_B], [y_valid, y_valid] ),
+    callbacks=[tensorboard_cb]
+)
+
+# %% create custom tensorflow logging
+
+test_logdir = get_run_logdir()
+
+writer = tf.summary.create_file_writer( test_logdir )
+
+with writer.as_default():
+    for step in range(1, 1000 + 1):
+        tf.summary.scalar('my_scalar', np.sin(step/10), step=step)
+        
+        data = (np.random.randn(100) + 2)*step/100
+        tf.summary.histogram('my_hist', data, buckets=50, step=step)
+        
+        images = np.random.rand(2, 32, 32, 3)
+        tf.summary.image('my_images', images*step/1000, step=step)
+        
+        texts = ['The step is ' + str(step) + ' - squared:' + str(step**2)]
+        tf.summary.text('my_tesxt', texts, step=step)
+        
+        sine_wave = tf.math.sin(tf.range(12000)/44100*2*np.pi*step)
+        audio = tf.reshape(tf.cast(sine_wave, tf.float32), [1, -1, 1])
+        tf.summary.audio('my_audio', audio, sample_rate=44100, step=step)
+        
+
+# %% fine-tuning hyperparameters
+
+def build_model( n_hidden=1, n_neurons=30, learning_rate=3e-3, input_shape=[8] ):
+    model = keras.models.Sequential()
+    model.add(keras.layers.InputLayer(input_shape=input_shape))
+    for layer in range(n_hidden):
+        model.add(keras.layers.Dense(n_neurons, activation='relu'))
+    model.add(keras.layers.Dense(1))
+    optimizer = keras.optimizers.SGD(lr=learning_rate)
+    model.compile(loss='mse', optimizer=optimizer)
+    return model
+
+# %% can be used as a standard sklearn regressor
+
+keras_reg = keras.wrappers.scikit_learn.KerasRegressor( build_model )
+
+keras_reg.fit(
+    X_train, y_train, epochs=100,
+    validation_data=(X_valid, y_valid),
+    callbacks=[keras.callbacks.EarlyStopping(patience=10)]
+)
+
+# %%
+
+mse_test = keras_reg.score( X_test, y_test )
+print( 'mse_test: ' +  repr(mse_test) )
+y_pred = keras_reg.predict(X_new)
+print( 'y_pred: ' +  repr(y_pred) )
+
+# %% randomized search
+
+# not working - need to downgrade scikit
+from scipy.stats import reciprocal
+from sklearn.model_selection import RandomizedSearchCV
+
+param_distribs = {
+    'n_hidden': [0, 1, 2, 3],
+    'n_neurons': np.arange(1, 100),
+    'learning_rate': reciprocal(3e-4, 3e-2)
+}
+
+rnd_search_cv = RandomizedSearchCV(keras_reg, param_distribs, n_iter=10, cv=3)
+rnd_search_cv.fit(
+    X_train, y_train, epochs=100,
+    validation_data=(X_valid, y_valid),
+    callbacks=[keras.callbacks.EarlyStopping(patience=10)]
+)
+
+# %%
+
+print(rnd_search_cv.best_params_)
+print(rnd_search_cv.best_score_)
+
+model = rnd_search_cv.best_estimator_.model
 
 
 
@@ -273,4 +481,4 @@ print('true: ' + repr(y_new))
 
 
 
-
+# ------
