@@ -154,13 +154,118 @@ model.add( keras.layers.Dense(10, activation='softmax') )
 
 # %% resize
 
-X_train_res = tf.image.grayscale_to_rgb( tf.image.resize(X_train, [224,224]) )
-X_valid_res = tf.image.grayscale_to_rgb( tf.image.resize(X_valid, [224,224]) )
+def my_preprocess(image):
+    return tf.image.grayscale_to_rgb( tf.image.resize(image, [224,224]) )
+
+batch_size = 32
+X_train_res = X_train.map( my_preprocess ).batch( batch_size ).prefetch( 1 )
+X_valid_res = X_valid.map( my_preprocess ).batch( batch_size ).prefetch( 1 )
+# NOT working - X_train is np array
 
 # %% train
 
 history = model.fit( X_train_res, y_train, epochs=30,
                     validation_data=(X_valid_res, y_valid))
+
+# %% pretrained
+
+model = keras.applications.resnet50.ResNet50(weights='imagenet')
+
+# %% resize example
+
+images_resized = tf.image.resize( images, [224, 224] )
+# for preserving aspect ratio:
+# images_resized = tf.image.crop_and_resize( images, [224, 224] )
+
+# %%
+
+plt.subplot(121)
+plt.imshow( images_resized[0] )
+plt.subplot(122)
+plt.imshow( images_resized[1] )
+
+# %% preprocess input
+
+inputs = keras.applications.resnet50.preprocess_input(images_resized*255)
+
+# %% prediction
+
+Y_proba = model.predict( inputs )
+
+# %% 
+
+top_5 = keras.applications.resnet50.decode_predictions(Y_proba, top=5)
+
+for img_idx in range( len( images_resized ) ):
+    print( 'image: ' + str(img_idx) )
+    for class_id, name, y_proba in top_5[ img_idx ]:
+        print( '{} - {:12s} {:.2f}%'.format( class_id, name, y_proba*100 ) )
+
+# %% transfer learning - load data
+
+import tensorflow_datasets as tfds
+
+dataset, info = tfds.load( 'tf_flowers', as_supervised=True, with_info=True )
+
+# %% explore info
+
+dataset_size = info.splits['train'].num_examples
+class_names = info.features['label'].names
+n_classes = info.features['label'].num_classes
+
+# %% get with train-validation-test
+
+test_set_raw, valid_set_raw, train_set_raw = tfds.load(
+    'tf_flowers',
+    split=['train[:10%]', 'train[10%:25%]', 'train[25%:]'],
+    as_supervised=True)
+
+# %% 
+
+def preprocess(image, label):
+    resized_image = tf.image.resize( image, [224, 224] )
+    final_image = keras.applications.xception.preprocess_input( resized_image )
+    return final_image, label
+
+batch_size = 12
+train_set = train_set_raw.shuffle(1000)
+train_set = train_set.map( preprocess ).batch( batch_size ).prefetch( 1 )
+valid_set = valid_set_raw.map( preprocess ).batch( batch_size ).prefetch( 1 )
+test_set = test_set_raw.map( preprocess ).batch( batch_size ).prefetch( 1 )
+
+
+# %% get pretrained model without top
+
+base_model = keras.applications.xception.Xception(weights='imagenet',
+                                                  include_top=False)
+
+avg = keras.layers.GlobalAveragePooling2D()(base_model.output)
+output = keras.layers.Dense( n_classes, activation='softmax' )(avg)
+model = keras.Model(inputs=base_model.input, outputs=output)
+
+# %% 
+
+for layer in base_model.layers:
+    layer.learnable = False
+
+
+# %% 
+optimizer = keras.optimizers.SGD( lr=0.2, momentum=0.9, decay=0.01 )
+model.compile(loss='sparse_categorical_crossentropy',
+              optimizer=optimizer, metrics=['accuracy'])
+history = model.fit(train_set, epochs=5, validation_data=valid_set)
+
+# %% unfreeze no
+
+for layer in base_model.layers:
+    layer.trainable=True
+
+optimizer = keras.optimizers.SGD( lr=0.01, momentum=0.9, decay=0.001 )
+model.compile(loss='sparse_categorical_crossentropy',
+              optimizer=optimizer, metrics=['accuracy'])
+history = model.fit(train_set, epochs=5, validation_data=valid_set)
+
+
 
 
 
